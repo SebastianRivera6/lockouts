@@ -13,7 +13,7 @@ class GlobalVariables:
     EntryID = ''
     RoomSpaceID = ''
     Description = ''
-    Amount = 0
+    Billing = 'standard'
     LockoutCount = 100
     cwid_list = []
     time_list = []
@@ -21,7 +21,7 @@ class GlobalVariables:
     TermID = 103
     bookingDataBody = "select roomspaceid, [roomspace].description from booking where entryid='{variable}' and entrystatusenum IN (2, 5)"
     cwidLookupBody = "select namepreferred, namefirst, namelast, entryid from entry where id1='{variable}'"
-    CwidcountURI = "https://fullerton.starrezhousing.com/StarRezREST/services/getreport/7232.json?entryID={variable}&termID=103"
+    CwidcountURI = "https://fullerton.starrezhousing.com/StarRezREST/services/getreport/7232.json?entryID={variable}&termID={variabletwo}"
     AddGenericDataURI = "https://fullerton.starrezhousing.com/StarRezREST/services/create/lockouts/"
     AddGenericDataBody = '''
     {
@@ -53,29 +53,52 @@ class GlobalVariables:
 #***HELPER FUNCTIONS***
 #----------------------------------------------------------------------------------------------------------------
 def process_datetime(input_datetime_str):
-    # Convert input string to datetime object
-    input_datetime = datetime.strptime(input_datetime_str, '%d/%m/%YT%H:%M:%S')
 
     # Check if it's a weekday between 8am and 5pm
     if 0 <= input_datetime.weekday() <= 4 and 8 <= input_datetime.hour < 17:
-        result_variable = 10
+        result_variable = 'standard'
     else:
-        result_variable = 20
+        result_variable = 'outside hours'
 
-    return result_variable
+    GlobalVariables.Billing = result_variable
 
-# Example usage:
-    input_datetime_str = "12/20/2023 15:11"
-    result_value = process_datetime(input_datetime_str)
-    print(f"The result variable is set to: {result_value}")
 
 
 
 #----------------------------------------------------------------------------------------------------------------
 
+
+def CopySheet():
+
+    # Load the source Excel file
+    source_file_path = "Dropbox (CSU Fullerton)/Admin and Conference Services/Technology/Lockouts/Lockouts.xlsx"
+    source_workbook = openpyxl.load_workbook(source_file_path)
+    source_sheet = source_workbook['Lockouts List']
+
+    destination_file_path = "Dropbox (CSU Fullerton)/Admin and Conference Services/Technology/Lockouts/LockoutsCopy.xlsx"
+    destination_workbook = openpyxl.load_workbook(destination_file_path)
+    destination_sheet = destination_workbook['Lockouts List']
+
+    # Iterate through rows and find the first blank row
+    non_empty_rows = sum(1 for row in destination_sheet.iter_rows() if any(cell.value is not None for cell in row)) + 1
+
+    #copy over new entries to second excel file
+    while source_sheet.cell(row=non_empty_rows, column=1).value is not None:
+        for col_index in range(1, source_sheet.max_column + 1):
+            destination_sheet.cell(row=non_empty_rows, column=col_index, value=source_sheet.cell(row=non_empty_rows, column=col_index).value)
+
+        non_empty_rows += 1
+
+    # Save the updated destination workbook
+    destination_workbook.save(destination_file_path)
+    # Close both workbooks
+    source_workbook.close()
+    destination_workbook.close()
+
 def get_unprocessed():
+    CopySheet()
     # Load the Excel workbook
-    workbook = openpyxl.load_workbook('Dropbox (CSU Fullerton)/Admin and Conference Services/Technology/Lockouts/Lockouts.xlsx')
+    workbook = openpyxl.load_workbook('Dropbox (CSU Fullerton)/Admin and Conference Services/Technology/Lockouts/LockoutsCopy.xlsx')
 
     # Assuming you are working with the first sheet (you can change it as needed)
     sheet = workbook['Lockouts List']
@@ -101,10 +124,9 @@ def get_unprocessed():
 
 
             # Update the corresponding cell in the 'processed' column for the current row
-            #sheet[column_to_check + str(row_index)].value = "yes"
+            sheet[column_to_check + str(row_index)].value = "yes"
             # Save the changes to the workbook
-    workbook.save('Dropbox (CSU Fullerton)/Admin and Conference Services/Technology/Lockouts/Lockouts.xlsx')
-
+    workbook.save('Dropbox (CSU Fullerton)/Admin and Conference Services/Technology/Lockouts/LockoutsCopy.xlsx')
     # Close the workbook when done
     workbook.close()
 
@@ -192,13 +214,14 @@ def send_post_request(request_data, state, index):
 
         if state == 2:
             uri = uri.replace('{variable}', str(variable_value))
+            uri = uri.replace('{variabletwo}', str(GlobalVariables.TermID))
+
         if state == 3:
             body = body.replace('{variable1}', str(GlobalVariables.EntryID))
             body = body.replace('{variable2}', str(GlobalVariables.time_list[index]))
             body = body.replace('{variable3}', str(GlobalVariables.RoomSpaceID))
             #body = body.replace('{variable4}', GlobalVariables.TermID)
 
-            print(body)
         # Prepare the request
         response = requests.request(
             method,
@@ -208,11 +231,9 @@ def send_post_request(request_data, state, index):
             data=body if state == 2 else body.replace('{variable}', str(variable_value)) if body else None
             )
 
-
         # Store the received data as a JSON object
         received_data = response.json()
-        if state==3:
-            print (response.text)
+
         #parse json
         for entry in response.json():
             process_entry(entry,state)
@@ -226,11 +247,12 @@ def send_post_request(request_data, state, index):
 #----------------------------------------------------------------------------------------------------------------
 #----------------------------------------------------------------------------------------------------------------
 
-
 #***DRIVER FUNCTIONS***
 
 #this function facilitates looking up students data from CWID and adding a lockout
 #record to generic Data
+
+
 def AddGenericData():
     GlobalVariables()
     state = 0
