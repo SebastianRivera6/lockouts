@@ -13,8 +13,6 @@ class GlobalVariables:
     EntryID = ''
     RoomSpaceID = ''
     Description = ''
-    Billing = 'standard'
-    LockoutCount = 100
     cwid_list = []
     time_list = []
     index = 0
@@ -28,6 +26,7 @@ class GlobalVariables:
         "ItemID": "{variable1}",
         "TimeStamp": "{variable2}",
         "RoomSpaceID": "{variable3}",
+        "Billing": "{variable4}",
         "TermID": 103,
         "Username": "Housing@fullerton.edu",
         "Processed":"False"
@@ -52,16 +51,14 @@ class GlobalVariables:
 
 #***HELPER FUNCTIONS***
 #----------------------------------------------------------------------------------------------------------------
-def process_datetime(input_datetime_str):
+def process_datetime(input_datetime):
 
+    input_datetime = datetime.strptime(input_datetime, "%Y/%m/%dT%H:%M:%S")
     # Check if it's a weekday between 8am and 5pm
     if 0 <= input_datetime.weekday() <= 4 and 8 <= input_datetime.hour < 17:
-        result_variable = 'standard'
+        GlobalVariables.Billing = 'standard'
     else:
-        result_variable = 'outside hours'
-
-    GlobalVariables.Billing = result_variable
-
+        GlobalVariables.Billing = 'outside hours'
 
 
 
@@ -164,7 +161,7 @@ def process_entry(entry,state):
     elif state == 1:
         GlobalVariables.RoomSpaceID = entry.get("RoomSpaceID")
         GlobalVariables.Description = entry.get("Description")
-    elif state == 2:
+    elif state == 100:
         GlobalVariables.LockoutCount = entry.get("Count")
 
 
@@ -179,14 +176,14 @@ def send_post_request(request_data, state, index):
         variable_value = GlobalVariables.CWID
     elif state==1:
         variable_value = GlobalVariables.EntryID
-    elif state == 2:
+    elif state == 100:
         variable_value = GlobalVariables.EntryID
         json_dict=json.loads(request_data)
         json_dict["uri"] = GlobalVariables.CwidcountURI
         json_dict["body"] = ''
         json_dict["method"] = 'GET'
         request_data=json.dumps(json_dict)
-    elif state == 3:
+    elif state == 2:
         variable1 = GlobalVariables.EntryID
         json_dict=json.loads(request_data)
         json_dict["uri"] = GlobalVariables.AddGenericDataURI
@@ -212,14 +209,16 @@ def send_post_request(request_data, state, index):
         # Prepare the request headers
         headers["Content-Type"] = "application/json"
 
-        if state == 2:
+        if state == 100:
             uri = uri.replace('{variable}', str(variable_value))
             uri = uri.replace('{variabletwo}', str(GlobalVariables.TermID))
 
-        if state == 3:
+        if state == 2:
             body = body.replace('{variable1}', str(GlobalVariables.EntryID))
             body = body.replace('{variable2}', str(GlobalVariables.time_list[index]))
             body = body.replace('{variable3}', str(GlobalVariables.RoomSpaceID))
+            body = body.replace('{variable4}', str(GlobalVariables.Billing))
+            print(body)
             #body = body.replace('{variable4}', GlobalVariables.TermID)
 
         # Prepare the request
@@ -228,7 +227,7 @@ def send_post_request(request_data, state, index):
             uri,
             headers=headers,
             auth=(username, password) if auth_type.lower() == "basic" else None,
-            data=body if state == 2 else body.replace('{variable}', str(variable_value)) if body else None
+            data=body if state == 100 else body.replace('{variable}', str(variable_value)) if body else None
             )
 
         # Store the received data as a JSON object
@@ -259,7 +258,6 @@ def AddGenericData():
 
     #retrieve list of unprocessed cwids
     get_unprocessed()
-
     #loop that tracks state of the process
     for temp in GlobalVariables.cwid_list:
         GlobalVariables.CWID = temp
@@ -277,11 +275,16 @@ def AddGenericData():
             send_post_request(GlobalVariables.data_json, state, GlobalVariables.index)
             state+=1
         if state == 2:
-            send_post_request(GlobalVariables.data_json, state, GlobalVariables.index)
-            state += 1
-        if state==3:
+            process_datetime(GlobalVariables.time_list[GlobalVariables.index])
             send_post_request(GlobalVariables.data_json, state, GlobalVariables.index)
             state=0
 
+
+
+
+        if state == 100:
+            send_post_request(GlobalVariables.data_json, state, GlobalVariables.index)
+            state += 1
+
         GlobalVariables.index+=1
-        print(GlobalVariables.NameFirst + '\n' + GlobalVariables.NameLast + '\n' + str(GlobalVariables.CWID) + '\n' + str(GlobalVariables.EntryID) + '\n' + str(GlobalVariables.RoomSpaceID) + '\n' + GlobalVariables.Description + '\n' + str(GlobalVariables.LockoutCount) + '\n')
+        print(GlobalVariables.NameFirst + '\n' + GlobalVariables.NameLast + '\n' + str(GlobalVariables.CWID) + '\n' + str(GlobalVariables.EntryID) + '\n' + str(GlobalVariables.RoomSpaceID) + '\n' + GlobalVariables.Description + '\n')
