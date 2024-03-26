@@ -3,6 +3,7 @@ import requests
 import pandas as pd
 import jsonschema
 from HelperFunctions import *
+import openpyxl
 
 class GlobalVariables:
     CWID = ''
@@ -12,7 +13,7 @@ class GlobalVariables:
     Description =''
     FormatDate = ""
     Billing = 'standard'
-    excel_file_name = 'LockoutsBeta.xlsx'
+    excel_file_name = 'Lockouts.xlsx'
 
 def SendRequest(json_file_path, state):
     # Read JSON file
@@ -63,9 +64,16 @@ def SendRequest(json_file_path, state):
             GlobalVariables.Description = entry.get("Description")
 
 def Driver():
-
     refresh_excel_connections(GlobalVariables.excel_file_name)
+
     df = pd.read_excel(GlobalVariables.excel_file_name)
+
+    # Load the Excel workbook
+    workbook = openpyxl.load_workbook('Lockouts.xlsx')
+    # Assuming you are working with the first sheet (you can change it as needed)
+    sheet = workbook['Lockouts List']
+
+
     # Loop through each row
     with open('Log.txt', 'w') as file:
         for index, row in df.iterrows():
@@ -77,13 +85,14 @@ def Driver():
                 process_datetime(GlobalVariables)
                 SendRequest('jsons/GetEntryID.json', 0)
                 
-                df['Processed'] = df['Processed'].astype(str)  # Convert the column to string dtype
-                df.at[index, 'Processed'] = str('yes')  # Write 'yes' to Column B
+                sheet['F' + str(index)].value = "yes"
+
                 
             SendRequest('jsons/GetBooking.json', 1)
             SendRequest('jsons/AddGenericData.json', 2)
             file.write(str(GlobalVariables.CWID) + '\n' + str(GlobalVariables.EntryID) + '\n' + str(GlobalVariables.RoomSpaceID) + '\n' + GlobalVariables.Description + '\n')
             file.write("-------------------------\n")
 
-        df.to_excel(GlobalVariables.excel_file_name, index=False)
-
+    workbook.save('Lockouts.xlsx')
+    # Close the workbook when done
+    workbook.close()
