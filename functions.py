@@ -4,6 +4,7 @@ import pandas as pd
 import jsonschema
 from HelperFunctions import *
 import openpyxl
+import win32com.client
 
 class GlobalVariables:
     CWID = ''
@@ -64,35 +65,30 @@ def SendRequest(json_file_path, state):
             GlobalVariables.Description = entry.get("Description")
 
 def Driver():
-    refresh_excel_connections(GlobalVariables.excel_file_name)
-
-    df = pd.read_excel(GlobalVariables.excel_file_name)
-
-    # Load the Excel workbook
-    workbook = openpyxl.load_workbook('Lockouts.xlsx')
-    # Assuming you are working with the first sheet (you can change it as needed)
-    sheet = workbook['Lockouts List']
-
+    excel_app, ws = refresh_excel_connections(GlobalVariables.excel_file_name)
+    last_row_column_A = excel_app.Cells(excel_app.Rows.Count, "A").End(-4162).Row
+    wss = excel_app.ActiveSheet
 
     # Loop through each row
     with open('Log.txt', 'w') as file:
-        for index, row in df.iterrows():
-            if pd.isnull(row['CWID']):  # Check if Column A is blank
-                break  # Stop if Column A is blank
-            if pd.isnull(row['Processed']):  # Check if Column F is blank
-                GlobalVariables.CWID = row['CWID']  # Get value from Column A
-                GlobalVariables.FormatDate = (row['Completion time'])
-                process_datetime(GlobalVariables)
-                SendRequest('jsons/GetEntryID.json', 0)
-                
-                sheet['F' + str(index)].value = "yes"
-
-                
+        for row in range(last_row_column_A, 0, -1):
+            if wss.Cells(row, 'F').Value is None:
+                wss.Cells(row, 'F').Value = 'yes'
+            else:
+                break
+            
+            GlobalVariables.CWID = wss.Cells(row, "A")  # Get value from Column A
+            GlobalVariables.FormatDate = wss.Cells(row, "B").Text
+            process_datetime(GlobalVariables)
+            SendRequest('jsons/GetEntryID.json', 0)
             SendRequest('jsons/GetBooking.json', 1)
             SendRequest('jsons/AddGenericData.json', 2)
             file.write(str(GlobalVariables.CWID) + '\n' + str(GlobalVariables.EntryID) + '\n' + str(GlobalVariables.RoomSpaceID) + '\n' + GlobalVariables.Description + '\n')
             file.write("-------------------------\n")
-
-    workbook.save('Lockouts.xlsx')
-    # Close the workbook when done
-    workbook.close()
+    
+    # Save the changes
+    ws.Save()
+    # Close the workbook
+    ws.Close()
+    # Quit Excel application
+    excel_app.Quit()
