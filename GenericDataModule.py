@@ -23,7 +23,7 @@ def SendRequest(json_file_path, state):
 
     # Extract request details from JSON
     uri = request_data.get('uri')
-    method = request_data.get('method', 'POST')
+    method = request_data.get('method')
     headers = request_data.get('headers', {})
     authentication = request_data.get("authentication", {})
     body = request_data.get('body', {})
@@ -46,7 +46,8 @@ def SendRequest(json_file_path, state):
         body = body.replace('{variable2}', str(GlobalVariables.FormatDate))
         body = body.replace('{variable3}', str(GlobalVariables.RoomSpaceID))
         body = body.replace('{variable4}', GlobalVariables.TermID)
-        body = body.replace('{variable5}', str('standard'))
+        body = body.replace('{variable5}',  GlobalVariables.Billing)
+
 
     #Send POST request with JSON data
     response = requests.request(
@@ -64,7 +65,7 @@ def SendRequest(json_file_path, state):
             GlobalVariables.RoomSpaceID = entry.get("RoomSpaceID")
             GlobalVariables.Description = entry.get("Description")
 
-def Driver():
+def GenericDataDriver():
     excel_app, ws = refresh_excel_connections(GlobalVariables.excel_file_name)
     last_row_column_A = excel_app.Cells(excel_app.Rows.Count, "A").End(-4162).Row
     wss = excel_app.ActiveSheet
@@ -85,7 +86,7 @@ def Driver():
             SendRequest('jsons/AddGenericData.json', 2)
             file.write(str(GlobalVariables.CWID) + '\n' + str(GlobalVariables.EntryID) + '\n' + str(GlobalVariables.RoomSpaceID) + '\n' + GlobalVariables.Description + '\n')
             file.write("-------------------------\n")
-    
+    print("All new Lockouts Logged\n")
     # Save the changes
     ws.Save()
     # Close the workbook
