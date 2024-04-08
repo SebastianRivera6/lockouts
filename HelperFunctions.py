@@ -33,4 +33,3 @@ def process_datetime(global_variables):
 
     # Format the DateTime value as required
     global_variables.FormatDate = format_date.strftime('%Y/%m/%dT%H:%M:%S')
-
